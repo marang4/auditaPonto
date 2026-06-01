@@ -1,7 +1,7 @@
-// src/services/StorageService.ts
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Chave única para evitar conflitos no armazenamento do celular
+
 const OS_STORAGE_KEY = "@audita_ponto_os";
 
 export interface OrdemServico {
@@ -17,7 +17,7 @@ export interface OrdemServico {
   dataCriacao: string;
 }
 export const StorageService = {
-  // Salva uma nova Ordem de Serviço
+
   async salvarOS(novaOS: OrdemServico): Promise<void> {
     try {
       const osExistentes = await this.buscarTodasOS();
@@ -29,30 +29,46 @@ export const StorageService = {
     } catch (error) {
       console.error("Erro ao salvar OS:", error);
       throw new Error(
-        "Falha ao persistir a Ordem de Serviço no armazenamento local.",
+        "Falha ao salvar a o.s localmente.",
       );
     }
   },
 
-  // Retorna todas as Ordens de Serviço (usado no Dashboard)
+ 
   async buscarTodasOS(): Promise<OrdemServico[]> {
     try {
       const dados = await AsyncStorage.getItem(OS_STORAGE_KEY);
       return dados ? JSON.parse(dados) : [];
     } catch (error) {
-      console.error("Erro ao buscar OSs:", error);
+      console.error("Erro ao buscar OS:", error);
       throw new Error("Falha ao recuperar a lista de Ordens de Serviço.");
     }
   },
 
-  // Retorna uma OS específica pelo ID (usado na Tela de Detalhes)
+  
   async buscarOSPorId(id: string): Promise<OrdemServico | undefined> {
-    try {
+  
       const osExistentes = await this.buscarTodasOS();
       return osExistentes.find((os) => os.id === id);
-    } catch (error) {
-      console.error(`Erro ao buscar OS com ID ${id}:`, error);
-      throw new Error("Falha ao recuperar os detalhes desta Ordem de Serviço.");
-    }
+
+
+  },
+
+  async atualizarOS(osAtualizada: OrdemServico): Promise<void> {
+   
+      const osExistentes = await this.buscarTodasOS();
+      const index = osExistentes.findIndex(os => os.id === osAtualizada.id);
+
+      if (index === -1) {
+        throw new Error("Ordem de Serviço não encontrada.");
+      }
+
+      osExistentes[index] = osAtualizada;
+      
+      await AsyncStorage.setItem(
+        OS_STORAGE_KEY,
+        JSON.stringify(osExistentes)
+      );
+
   },
 };
