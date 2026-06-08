@@ -1,5 +1,7 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useAudioPlayer } from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,33 +9,36 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { OrdemServico, StorageService } from '../../services/StorageService';
-import { colors } from '../../theme/colors';
+  View,
+} from "react-native";
+import { OrdemServico, StorageService } from "../../services/StorageService";
+import { colors } from "../../theme/colors";
 
 export default function DetalhesOSTela() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  
+
   const [os, setOs] = useState<OrdemServico | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  // Inicializa o motor de reprodução do expo-audio
+  const player = useAudioPlayer(os?.audioUri || "");
 
   const carregarDetalhes = async () => {
     if (!id) return;
-    
     setIsLoading(true);
     try {
       const dados = await StorageService.buscarOSPorId(id);
       if (dados) {
         setOs(dados);
       } else {
-        Alert.alert('Ordem de Serviço não encontrada.');
+        Alert.alert("Erro", "Ordem de Serviço não encontrada.");
         router.back();
       }
     } catch (error) {
-      Alert.alert('Falha ao carregar os detalhes da O.S.');
+      Alert.alert("Erro", "Falha ao carregar os detalhes da vistoria.");
     } finally {
       setIsLoading(false);
     }
@@ -42,22 +47,98 @@ export default function DetalhesOSTela() {
   useFocusEffect(
     useCallback(() => {
       carregarDetalhes();
-    }, [id])
+    }, [id]),
   );
 
-  const alterarStatus = async (novoStatus: OrdemServico['status']) => {
+  const alterarStatus = async (novoStatus: OrdemServico["status"]) => {
     if (!os || os.status === novoStatus) return;
-    
     setIsSaving(true);
     try {
       const osAtualizada = { ...os, status: novoStatus };
       await StorageService.atualizarOS(osAtualizada);
       setOs(osAtualizada);
-      Alert.alert(' Ordem de Serviço atualizada com sucesso.');
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível atualizar a ordem de serviço.');
+      Alert.alert("Erro", "Não foi possível atualizar o estado.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const transcreverAudio = async () => {
+    if (!os || !os.audioUri) return;
+
+    setIsTranscribing(true);
+    try {
+      // 1. Lê o ficheiro físico de áudio e converte em Base64
+      const base64Audio = await FileSystem.readAsStringAsync(os.audioUri, {
+        encoding: "base64",
+      });
+
+      // 2. Prepara a requisição para o Google Cloud
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY;
+      if (!apiKey) {
+        Alert.alert(
+          "Erro de Infraestrutura",
+          "Chave da API do Google não encontrada no ficheiro .env",
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              languageCode: "pt-BR",
+              encoding: "AMR_WB", // A IA agora sabe a forma exata de processar a onda sonora
+              sampleRateHertz: 16000,
+            },
+            audio: {
+              content: base64Audio,
+            },
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      // 3. Valida a resposta da IA e atualiza o banco de dados
+      if (data.results && data.results.length > 0) {
+        const texto = data.results[0].alternatives[0].transcript;
+        const osAtualizada = { ...os, transcricao: texto };
+
+        await StorageService.atualizarOS(osAtualizada);
+        setOs(osAtualizada);
+        Alert.alert("Sucesso", "Áudio transcrito pela IA do Google!");
+      } else {
+        Alert.alert(
+          "Aviso",
+          "O Google não conseguiu detetar voz neste áudio. Tente gravar novamente num ambiente mais silencioso.",
+        );
+        console.log("Resposta do Google:", data);
+      }
+    } catch (error) {
+      Alert.alert(
+        "Erro na Nuvem",
+        "Não foi possível conectar aos servidores do Google.",
+      );
+      console.error(error);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const togglePlayback = () => {
+    if (player.playing) {
+      player.pause();
+    } else {
+      // Se o tempo atual for igual ou maior que a duração total, retrocede para o início
+      if (player.currentTime >= player.duration) {
+        player.seekTo(0);
+      }
+      player.play();
     }
   };
 
@@ -73,62 +154,112 @@ export default function DetalhesOSTela() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      
       <Text style={styles.sectionTitle}>Detalhes da Vistoria</Text>
       <View style={styles.card}>
         <Text style={styles.label}>Tipo de Equipamento:</Text>
         <Text style={styles.value}>{os.tipo}</Text>
-
         <Text style={styles.label}>Fabricante:</Text>
         <Text style={styles.value}>{os.fabricante}</Text>
-
         <Text style={styles.label}>Modelo:</Text>
         <Text style={styles.value}>{os.modelo}</Text>
-
         <Text style={styles.label}>Número de Série:</Text>
         <Text style={styles.value}>{os.numeroSerie}</Text>
-
         <Text style={styles.label}>Empresa / Cliente:</Text>
         <Text style={styles.value}>{os.empresa}</Text>
-        
         <Text style={styles.label}>Data de Registo:</Text>
-        <Text style={styles.value}>{new Date(os.dataCriacao).toLocaleDateString('pt-PT')}</Text>
+        <Text style={styles.value}>
+          {new Date(os.dataCriacao).toLocaleDateString("pt-PT")}
+        </Text>
       </View>
 
       <Text style={styles.sectionTitle}>Alterar Estado</Text>
       <View style={styles.statusContainer}>
-        {(['Concluído', 'Pendente', 'Retirado para manutenção'] as const).map((opcao) => {
-          
-          let activeStyle;
-          if (opcao === 'Concluído') activeStyle = styles.statusActiveConcluido;
-          else if (opcao === 'Pendente') activeStyle = styles.statusActivePendente;
-          else if (opcao === 'Retirado para manutenção') activeStyle = styles.statusActiveRetirado;
+        {(["Concluído", "Pendente", "Retirado para manutenção"] as const).map(
+          (opcao) => {
+            let activeStyle;
+            if (opcao === "Concluído")
+              activeStyle = styles.statusActiveConcluido;
+            else if (opcao === "Pendente")
+              activeStyle = styles.statusActivePendente;
+            else if (opcao === "Retirado para manutenção")
+              activeStyle = styles.statusActiveRetirado;
 
-          return (
-            <TouchableOpacity 
-              key={opcao}
-              style={[
-                styles.statusButton, 
-                os.status === opcao && activeStyle
-              ]}
-              onPress={() => alterarStatus(opcao)}
-              disabled={isSaving}
-            >
-              {isSaving && os.status !== opcao ? (
-                <ActivityIndicator color={colors.textSecondary} size="small" />
-              ) : (
-                <Text style={[
-                  styles.statusText, 
-                  os.status === opcao && styles.statusTextActive
-                ]}>
-                  {opcao}
-                </Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={opcao}
+                style={[
+                  styles.statusButton,
+                  os.status === opcao && activeStyle,
+                ]}
+                onPress={() => alterarStatus(opcao)}
+                disabled={isSaving}
+              >
+                {isSaving && os.status !== opcao ? (
+                  <ActivityIndicator
+                    color={colors.textSecondary}
+                    size="small"
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.statusText,
+                      os.status === opcao && styles.statusTextActive,
+                    ]}
+                  >
+                    {opcao}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          },
+        )}
       </View>
 
+      <Text style={styles.sectionTitle}>Evidência e Laudo Técnico</Text>
+      <View style={styles.audioCard}>
+        {os.audioUri ? (
+          <View style={styles.audioControls}>
+            <TouchableOpacity
+              style={styles.playButton}
+              onPress={togglePlayback}
+            >
+              <Text style={styles.playButtonText}>
+                {player.playing ? "⏸ Pausar Áudio" : "▶ Reproduzir Vistoria"}
+              </Text>
+            </TouchableOpacity>
+
+            {!os.transcricao && (
+              <TouchableOpacity
+                style={[
+                  styles.transcribeButton,
+                  isTranscribing && styles.disabledButton,
+                ]}
+                onPress={transcreverAudio}
+                disabled={isTranscribing}
+              >
+                {isTranscribing ? (
+                  <ActivityIndicator color={colors.surface} />
+                ) : (
+                  <Text style={styles.transcribeButtonText}>
+                    ⚙️ Gerar Laudo com IA (Google)
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.textoMutado}>
+            Nenhuma evidência em áudio anexada.
+          </Text>
+        )}
+
+        {os.transcricao && (
+          <View style={styles.transcriptionBox}>
+            <Text style={styles.transcriptionTitle}>Laudo Transcrito:</Text>
+            <Text style={styles.transcriptionText}>{os.transcricao}</Text>
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -136,8 +267,8 @@ export default function DetalhesOSTela() {
 const styles = StyleSheet.create({
   center: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: colors.background,
   },
   container: {
@@ -148,7 +279,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: colors.text,
     marginBottom: 15,
     marginTop: 10,
@@ -161,48 +292,72 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 25,
   },
-  label: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 10,
-  },
+  label: { fontSize: 12, color: colors.textSecondary, marginTop: 10 },
   value: {
     fontSize: 16,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 5,
   },
-  statusContainer: {
-    flexDirection: 'column',
-    gap: 8,
-  },
- statusButton: {
+  statusContainer: { flexDirection: "column", gap: 8 },
+  statusButton: {
     paddingVertical: 14,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     backgroundColor: colors.surface,
   },
-  // NOVOS ESTILOS SEMÂNTICOS
-  statusActiveConcluido: {
-    backgroundColor: '#2E7D32',
-    borderColor: '#2E7D32',
+  statusActiveConcluido: { backgroundColor: "#2E7D32", borderColor: "#2E7D32" },
+  statusActivePendente: { backgroundColor: "#1976D2", borderColor: "#1976D2" },
+  statusActiveRetirado: { backgroundColor: "#424242", borderColor: "#424242" },
+  statusText: { color: colors.textSecondary, fontWeight: "600", fontSize: 15 },
+  statusTextActive: { color: colors.surface },
+  audioCard: {
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 5,
   },
-  statusActivePendente: {
-    backgroundColor: '#1976D2',
-    borderColor: '#1976D2',
+  audioControls: { gap: 10 },
+  playButton: {
+    backgroundColor: "#EAEAEA",
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#CCC",
   },
-  statusActiveRetirado: {
-    backgroundColor: '#424242',
-    borderColor: '#424242',
+  playButtonText: { color: colors.text, fontWeight: "bold" },
+  transcribeButton: {
+    backgroundColor: colors.primary,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
   },
-  statusText: {
+  disabledButton: { opacity: 0.7 },
+  transcribeButtonText: { color: colors.surface, fontWeight: "bold" },
+  textoMutado: {
     color: colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 15,
+    fontStyle: "italic",
+    textAlign: "center",
   },
-  statusTextActive: {
-    color: colors.surface, // Mantém o texto branco quando selecionado
+  transcriptionBox: {
+    marginTop: 20,
+    padding: 15,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
+  transcriptionTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: colors.textSecondary,
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  transcriptionText: { fontSize: 16, color: colors.text, lineHeight: 24 },
 });
