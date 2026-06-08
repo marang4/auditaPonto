@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useAudioPlayer } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -23,7 +24,6 @@ export default function DetalhesOSTela() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  // Inicializa o motor de reprodução do expo-audio
   const player = useAudioPlayer(os?.audioUri || "");
 
   const carregarDetalhes = async () => {
@@ -69,12 +69,10 @@ export default function DetalhesOSTela() {
 
     setIsTranscribing(true);
     try {
-      // 1. Lê o ficheiro físico de áudio e converte em Base64
       const base64Audio = await FileSystem.readAsStringAsync(os.audioUri, {
         encoding: "base64",
       });
 
-      // 2. Prepara a requisição para o Google Cloud
       const apiKey = process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY;
       if (!apiKey) {
         Alert.alert(
@@ -83,28 +81,27 @@ export default function DetalhesOSTela() {
         );
         return;
       }
-
-      const response = await fetch(
+      
+      const response = await axios.post(
         `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            config: {
-              languageCode: "pt-BR",
-              encoding: "AMR_WB", // A IA agora sabe a forma exata de processar a onda sonora
-              sampleRateHertz: 16000,
-            },
-            audio: {
-              content: base64Audio,
-            },
-          }),
+          config: {
+            languageCode: "pt-BR",
+            encoding: "AMR_WB",
+            sampleRateHertz: 16000,
+          },
+          audio: {
+            content: base64Audio,
+          },
         },
+        {
+          headers: { "Content-Type": "application/json" },
+        }
       );
 
-      const data = await response.json();
 
-      // 3. Valida a resposta da IA e atualiza o banco de dados
+      const data = response.data;
+
       if (data.results && data.results.length > 0) {
         const texto = data.results[0].alternatives[0].transcript;
         const osAtualizada = { ...os, transcricao: texto };
@@ -134,7 +131,6 @@ export default function DetalhesOSTela() {
     if (player.playing) {
       player.pause();
     } else {
-      // Se o tempo atual for igual ou maior que a duração total, retrocede para o início
       if (player.currentTime >= player.duration) {
         player.seekTo(0);
       }
@@ -241,7 +237,7 @@ export default function DetalhesOSTela() {
                   <ActivityIndicator color={colors.surface} />
                 ) : (
                   <Text style={styles.transcribeButtonText}>
-                    ⚙️ Gerar Laudo com IA (Google)
+                    Gerar Laudo com IA (Google)
                   </Text>
                 )}
               </TouchableOpacity>

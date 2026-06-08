@@ -138,18 +138,21 @@ export default function NovaOSTela() {
         <TextInput 
           style={styles.input} 
           placeholder="Fabricante (Ex: Control iD, Henry...)" 
+          placeholderTextColor="#666666"
           value={fabricante}
           onChangeText={setFabricante}
         />
         <TextInput 
           style={styles.input} 
           placeholder="Modelo" 
+          placeholderTextColor="#666666"
           value={modelo}
           onChangeText={setModelo}
         />
         <TextInput 
           style={styles.input} 
           placeholder="Número de Série" 
+          placeholderTextColor="#666666"
           keyboardType="numeric"
           value={numeroSerie}
           onChangeText={setNumeroSerie}
@@ -157,6 +160,7 @@ export default function NovaOSTela() {
         <TextInput 
           style={styles.input} 
           placeholder="Empresa / Cliente" 
+          placeholderTextColor="#666666"
           value={empresa}
           onChangeText={setEmpresa}
         />
@@ -164,8 +168,6 @@ export default function NovaOSTela() {
         <Text style={styles.sectionTitle}>Status do Atendimento</Text>
         <View style={styles.statusContainer}>
           {(['Concluído', 'Pendente', 'Retirado para manutenção'] as const).map((opcao) => {
-            
-            // Roteamento dinâmico de cores baseado no status
             let activeStyle;
             if (opcao === 'Concluído') activeStyle = styles.statusActiveConcluido;
             else if (opcao === 'Pendente') activeStyle = styles.statusActivePendente;
@@ -176,7 +178,7 @@ export default function NovaOSTela() {
                 key={opcao}
                 style={[
                   styles.statusButton, 
-                  status === opcao && activeStyle // Aplica a cor específica se estiver selecionado
+                  status === opcao && activeStyle
                 ]}
                 onPress={() => setStatus(opcao)}
               >
@@ -244,7 +246,10 @@ const styles = StyleSheet.create({
   selectorActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   selectorText: { color: colors.textSecondary, fontWeight: '600' },
   selectorTextActive: { color: colors.surface },
-  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 14, marginBottom: 12, fontSize: 16, color: colors.text },
+  
+  // A cor foi fixada em #000000 para sobrepor o texto branco forçado pelo Dark Mode
+  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 14, marginBottom: 12, fontSize: 16, color: '#000000' },
+  
   statusContainer: { flexDirection: 'column', gap: 8 },
   statusButton: {
     paddingVertical: 12,
@@ -254,26 +259,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-
-  statusActiveConcluido: {
-    backgroundColor: '#2E7D32', 
-    borderColor: '#2E7D32',
-  },
-  statusActivePendente: {
-    backgroundColor: '#1976D2', 
-    borderColor: '#1976D2',
-  },
-  statusActiveRetirado: {
-    backgroundColor: '#424242', 
-    borderColor: '#424242',
-  },
-  statusText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  statusTextActive: {
-    color: colors.surface,
-  },
+  statusActiveConcluido: { backgroundColor: '#2E7D32', borderColor: '#2E7D32' },
+  statusActivePendente: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
+  statusActiveRetirado: { backgroundColor: '#424242', borderColor: '#424242' },
+  statusText: { color: colors.textSecondary, fontWeight: '600' },
+  statusTextActive: { color: colors.surface },
   audioContainer: { marginBottom: 30 },
   recordButton: { backgroundColor: '#EAEAEA', borderWidth: 1, borderColor: '#CCC', paddingVertical: 20, borderRadius: 8, alignItems: 'center' },
   recordButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 16 },

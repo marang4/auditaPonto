@@ -36,7 +36,7 @@ export default function DashboardTela() {
   );
 
   const renderItem = ({ item }: { item: OrdemServico }) => {
-    // Roteamento dinâmico da cor do selo no Dashboard
+
     let badgeStyle;
     if (item.status === 'Concluído') badgeStyle = styles.badgeConcluido;
     else if (item.status === 'Pendente') badgeStyle = styles.badgePendente;
