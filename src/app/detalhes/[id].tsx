@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 import { useAudioPlayer } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -81,7 +81,7 @@ export default function DetalhesOSTela() {
         );
         return;
       }
-      
+
       const response = await axios.post(
         `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
         {
@@ -96,9 +96,8 @@ export default function DetalhesOSTela() {
         },
         {
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
-
 
       const data = response.data;
 
@@ -131,7 +130,7 @@ export default function DetalhesOSTela() {
     if (player.playing) {
       player.pause();
     } else {
-      if (player.currentTime >= player.duration) {
+      if (player.duration && player.currentTime >= player.duration - 0.5) {
         player.seekTo(0);
       }
       player.play();
