@@ -330,7 +330,6 @@ export default function NovaOSTela() {
           )}
         </View>
 
-        {/* O botão agora aciona a função handleSubmit do React Hook Form */}
         <TouchableOpacity
           style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
           onPress={handleSubmit(onSubmit)}
